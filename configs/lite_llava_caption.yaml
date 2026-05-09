@@ -12,17 +12,17 @@ model:
   lora_dropout: 0.05
 
 data:
-  train_jsonl: data/train.jsonl
+  train_jsonl: /media/ozakiy/Data/waon_train_ja_base_caption.jsonl
   val_jsonl:
   image_root:
-  caption_key: caption
+  caption_key: text
   image_key: image
   prompt: "画像を日本語で簡潔に説明してください。"
   max_text_length: 96
   num_workers: 2
 
 train:
-  output_dir: outputs/lite-captioner
+  output_dir: /mnt/nvme1n1/lite-captioner
   epochs: 3
   batch_size: 8
   gradient_accumulation_steps: 4

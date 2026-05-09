@@ -46,7 +46,8 @@ class LiteLlavaCaptioner(nn.Module):
         super().__init__()
         self.cfg = cfg
         torch_dtype = resolve_torch_dtype(cfg.torch_dtype)
-        self.vision_model = AutoModel.from_pretrained(cfg.vision_model, torch_dtype=torch_dtype)
+        vision_model = AutoModel.from_pretrained(cfg.vision_model, torch_dtype=torch_dtype)
+        self.vision_model = getattr(vision_model, "vision_model", vision_model)
         self.language_model = AutoModelForCausalLM.from_pretrained(
             cfg.language_model,
             torch_dtype=torch_dtype,
