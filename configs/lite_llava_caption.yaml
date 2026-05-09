@@ -1,0 +1,37 @@
+model:
+  vision_model: google/siglip2-so400m-patch16-512
+  language_model: sbintuitions/sarashina2.2-0.5b-instruct-v0.1
+  torch_dtype: auto
+  projector_type: mlp
+  num_image_tokens: 64
+  freeze_vision: true
+  freeze_language_model: true
+  use_lora: false
+  lora_r: 16
+  lora_alpha: 32
+  lora_dropout: 0.05
+
+data:
+  train_jsonl: data/train.jsonl
+  val_jsonl:
+  image_root:
+  caption_key: caption
+  image_key: image
+  prompt: "画像を日本語で簡潔に説明してください。"
+  max_text_length: 96
+  num_workers: 2
+
+train:
+  output_dir: outputs/lite-captioner
+  epochs: 3
+  batch_size: 8
+  gradient_accumulation_steps: 4
+  learning_rate: 0.0002
+  weight_decay: 0.01
+  warmup_ratio: 0.03
+  max_grad_norm: 1.0
+  mixed_precision: bf16
+  require_cuda: true
+  log_every: 20
+  save_every_steps: 1000
+  seed: 42
