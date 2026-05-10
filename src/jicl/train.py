@@ -10,7 +10,7 @@ from accelerate import Accelerator
 from torch.optim import AdamW
 from torch.utils.data import DataLoader
 from tqdm.auto import tqdm
-from transformers import AutoImageProcessor, AutoTokenizer, get_cosine_schedule_with_warmup
+from transformers import AutoImageProcessor, AutoTokenizer, get_constant_schedule_with_warmup, get_cosine_schedule_with_warmup
 
 from .config import load_config, save_config
 from .data import CaptionCollator, CaptionJsonlDataset
@@ -31,6 +31,34 @@ def set_seed(seed: int) -> None:
 
 def trainable_parameters(model: torch.nn.Module):
     return [p for p in model.parameters() if p.requires_grad]
+
+
+def build_optimizer(cfg, parameters):
+    if cfg.train.optimizer == "adamw":
+        return AdamW(
+            parameters,
+            lr=cfg.train.learning_rate,
+            weight_decay=cfg.train.weight_decay,
+        )
+    if cfg.train.optimizer == "adamw8bit":
+        try:
+            from bitsandbytes.optim import AdamW8bit
+        except ImportError as exc:
+            raise ImportError("Install bitsandbytes or run `uv sync --extra bnb` to use train.optimizer: adamw8bit.") from exc
+        return AdamW8bit(
+            parameters,
+            lr=cfg.train.learning_rate,
+            weight_decay=cfg.train.weight_decay,
+        )
+    raise ValueError("train.optimizer must be one of: adamw, adamw8bit")
+
+
+def build_scheduler(cfg, optimizer, warmup_steps: int, total_steps: int):
+    if cfg.train.lr_scheduler == "cosine":
+        return get_cosine_schedule_with_warmup(optimizer, warmup_steps, total_steps)
+    if cfg.train.lr_scheduler == "constant_with_warmup":
+        return get_constant_schedule_with_warmup(optimizer, warmup_steps)
+    raise ValueError("train.lr_scheduler must be one of: cosine, constant_with_warmup")
 
 
 def main() -> None:
@@ -63,15 +91,11 @@ def main() -> None:
     )
 
     model = LiteLlavaCaptioner(cfg.model)
-    optimizer = AdamW(
-        trainable_parameters(model),
-        lr=cfg.train.learning_rate,
-        weight_decay=cfg.train.weight_decay,
-    )
+    optimizer = build_optimizer(cfg, trainable_parameters(model))
     updates_per_epoch = math.ceil(len(train_loader) / cfg.train.gradient_accumulation_steps)
     total_steps = cfg.train.epochs * updates_per_epoch
     warmup_steps = int(total_steps * cfg.train.warmup_ratio)
-    scheduler = get_cosine_schedule_with_warmup(optimizer, warmup_steps, total_steps)
+    scheduler = build_scheduler(cfg, optimizer, warmup_steps, total_steps)
 
     model, optimizer, train_loader, scheduler = accelerator.prepare(
         model,

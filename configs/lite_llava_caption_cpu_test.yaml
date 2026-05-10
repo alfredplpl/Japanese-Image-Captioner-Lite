@@ -29,8 +29,10 @@ train:
   epochs: 1
   batch_size: 1
   gradient_accumulation_steps: 1
+  optimizer: adamw
   learning_rate: 0.0002
   weight_decay: 0.01
+  lr_scheduler: constant_with_warmup
   warmup_ratio: 0.0
   max_grad_norm: 1.0
   mixed_precision: none

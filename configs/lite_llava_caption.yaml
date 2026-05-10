@@ -1,7 +1,7 @@
 model:
   vision_model: google/siglip2-so400m-patch16-512
   language_model: sbintuitions/sarashina2.2-0.5b-instruct-v0.1
-  torch_dtype: auto
+  torch_dtype: bf16
   projector_type: mlp
   projector_layer_norm: true
   projector_dropout: 0.05
@@ -28,8 +28,10 @@ train:
   epochs: 3
   batch_size: 2
   gradient_accumulation_steps: 1
-  learning_rate: 0.0002
-  weight_decay: 0.01
+  optimizer: adamw
+  learning_rate: 0.0001
+  weight_decay: 0.00
+  lr_scheduler: constant_with_warmup
   warmup_ratio: 0.03
   max_grad_norm: 1.0
   mixed_precision: bf16

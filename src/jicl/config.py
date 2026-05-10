@@ -43,8 +43,10 @@ class TrainConfig:
     epochs: int = 3
     batch_size: int = 8
     gradient_accumulation_steps: int = 4
+    optimizer: str = "adamw"
     learning_rate: float = 2e-4
     weight_decay: float = 0.01
+    lr_scheduler: str = "cosine"
     warmup_ratio: float = 0.03
     max_grad_norm: float = 1.0
     mixed_precision: str = "bf16"
