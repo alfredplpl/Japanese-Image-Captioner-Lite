@@ -24,15 +24,34 @@ def resolve_torch_dtype(dtype_name: str) -> torch.dtype | str | None:
 
 
 class VisionProjector(nn.Module):
-    def __init__(self, vision_dim: int, lm_dim: int, projector_type: str):
+    def __init__(
+        self,
+        vision_dim: int,
+        lm_dim: int,
+        projector_type: str,
+        layer_norm: bool = False,
+        dropout: float = 0.0,
+    ):
         super().__init__()
+        if dropout < 0.0 or dropout >= 1.0:
+            raise ValueError("projector_dropout must be in the range [0.0, 1.0)")
+        input_norm = nn.LayerNorm(vision_dim) if layer_norm else nn.Identity()
+        output_norm = nn.LayerNorm(lm_dim) if layer_norm else nn.Identity()
+        dropout_layer = nn.Dropout(dropout) if dropout > 0.0 else nn.Identity()
         if projector_type == "linear":
-            self.net = nn.Linear(vision_dim, lm_dim)
+            self.net = nn.Sequential(
+                input_norm,
+                nn.Linear(vision_dim, lm_dim),
+                output_norm,
+            )
         elif projector_type == "mlp":
             self.net = nn.Sequential(
+                input_norm,
                 nn.Linear(vision_dim, lm_dim),
                 nn.GELU(),
+                dropout_layer,
                 nn.Linear(lm_dim, lm_dim),
+                output_norm,
             )
         else:
             raise ValueError("projector_type must be 'linear' or 'mlp'")
@@ -42,7 +61,7 @@ class VisionProjector(nn.Module):
 
 
 class LiteLlavaCaptioner(nn.Module):
-    def __init__(self, cfg: ModelConfig):
+    def __init__(self, cfg: ModelConfig, init_lora: bool = True):
         super().__init__()
         self.cfg = cfg
         torch_dtype = resolve_torch_dtype(cfg.torch_dtype)
@@ -58,12 +77,18 @@ class LiteLlavaCaptioner(nn.Module):
         if cfg.freeze_language_model:
             self.language_model.requires_grad_(False)
 
-        if cfg.use_lora:
+        if cfg.use_lora and init_lora:
             self._enable_lora(cfg)
 
         vision_dim = self._vision_hidden_size(cfg.vision_model)
         lm_dim = self.language_model.get_input_embeddings().embedding_dim
-        self.projector = VisionProjector(vision_dim, lm_dim, cfg.projector_type)
+        self.projector = VisionProjector(
+            vision_dim,
+            lm_dim,
+            cfg.projector_type,
+            layer_norm=cfg.projector_layer_norm,
+            dropout=cfg.projector_dropout,
+        )
 
     @staticmethod
     def _vision_hidden_size(model_name: str) -> int:
@@ -89,7 +114,11 @@ class LiteLlavaCaptioner(nn.Module):
         self.language_model = get_peft_model(self.language_model, lora_cfg)
 
     def encode_images(self, pixel_values: torch.Tensor) -> torch.Tensor:
-        vision_outputs = self.vision_model(pixel_values=pixel_values, output_hidden_states=False)
+        if self.cfg.freeze_vision:
+            with torch.no_grad():
+                vision_outputs = self.vision_model(pixel_values=pixel_values, output_hidden_states=False)
+        else:
+            vision_outputs = self.vision_model(pixel_values=pixel_values, output_hidden_states=False)
         features = getattr(vision_outputs, "last_hidden_state", None)
         if features is None:
             features = vision_outputs[0]
@@ -173,7 +202,11 @@ class LiteLlavaCaptioner(nn.Module):
                 from peft import PeftModel
             except ImportError as exc:
                 raise ImportError("Install peft to load a LoRA checkpoint.") from exc
+            lora_dir = checkpoint_dir / "lora"
+            if not lora_dir.exists():
+                raise FileNotFoundError(f"LoRA checkpoint directory not found: {lora_dir}")
             self.language_model = PeftModel.from_pretrained(
                 self.language_model,
-                checkpoint_dir / "lora",
+                lora_dir,
+                is_trainable=False,
             )

@@ -13,6 +13,8 @@ class ModelConfig:
     language_model: str = "sbintuitions/sarashina2.2-0.5b-instruct-v0.1"
     torch_dtype: str = "auto"
     projector_type: str = "mlp"
+    projector_layer_norm: bool = False
+    projector_dropout: float = 0.0
     num_image_tokens: int = 64
     freeze_vision: bool = True
     freeze_language_model: bool = True
@@ -31,6 +33,7 @@ class DataConfig:
     image_key: str = "image"
     prompt: str = "画像を日本語で簡潔に説明してください。"
     max_text_length: int = 96
+    max_train_samples: int | None = None
     num_workers: int = 2
 
 

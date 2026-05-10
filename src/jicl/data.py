@@ -34,6 +34,10 @@ class CaptionJsonlDataset(Dataset):
                 records.append(item)
         if not records:
             raise ValueError(f"No records found in {self.jsonl_path}")
+        if self.cfg.max_train_samples is not None:
+            if self.cfg.max_train_samples <= 0:
+                raise ValueError("data.max_train_samples must be greater than 0 when set")
+            records = records[: self.cfg.max_train_samples]
         return records
 
     def __len__(self) -> int:

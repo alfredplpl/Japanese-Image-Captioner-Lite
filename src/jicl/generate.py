@@ -47,7 +47,7 @@ def main() -> None:
     image_processor = AutoImageProcessor.from_pretrained(cfg.model.vision_model)
     cfg.model.torch_dtype = args.dtype
 
-    model = LiteLlavaCaptioner(cfg.model)
+    model = LiteLlavaCaptioner(cfg.model, init_lora=False)
     model.load_lite(checkpoint, map_location=device)
     model.to(device=device, dtype=dtype)
     model.eval()
