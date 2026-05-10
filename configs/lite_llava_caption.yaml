@@ -1,6 +1,6 @@
 model:
   vision_model: google/siglip2-so400m-patch16-512
-  language_model: sbintuitions/sarashina2.2-0.5b-instruct-v0.1
+  language_model: sbintuitions/sarashina2.2-1b-instruct-v0.1
   torch_dtype: bf16
   projector_type: mlp
   projector_layer_norm: true
@@ -14,7 +14,7 @@ model:
   lora_dropout: 0.05
 
 data:
-  train_jsonl: /media/ozakiy/Data/dejima_small.jsonl
+  train_jsonl: /media/ozakiy/Data/dejima_all.jsonl
   val_jsonl:
   image_root:
   caption_key: text

@@ -5,12 +5,11 @@
 構成はシンプルです。
 
 - vision tower: `google/siglip2-so400m-patch16-512`
-- language model: `sbintuitions/sarashina2.2-0.5b-instruct-v0.1`
-- trainable layer: vision特徴をLM埋め込みへ写すprojector
-- optional: `peft` を入れるとLoRAでLMの一部も学習可能
+- language model: `sbintuitions/sarashina2.2-1b-instruct-v0.1`
+- image tokens: SigLIP2の1024 patch tokensをそのままLMへ渡す
+- trainable layers: vision特徴をLM埋め込みへ写す2層MLP projectorと、LMのLoRA adapter
 
-Florence-2級の軽さを狙うなら、まずはデフォルトのままprojector onlyで始めるのが現実的です。日本語の自然さを上げたい場合だけLoRAを有効にします。
-デフォルト設定はCUDA GPU前提です。CPUで試す場合は `train.require_cuda: false` に変更し、推論では `--device cpu --allow-cpu` を指定します。
+デフォルト設定はCUDA GPU前提です。CPUで短い動作確認だけする場合は `configs/lite_llava_caption_cpu_test.yaml` を使い、推論では `--device cpu --allow-cpu` を指定します。
 
 ## データ形式
 
@@ -64,6 +63,8 @@ data/
 - 人物、物体、場所、状態、動作、色、数など、画像から判断できる情報を入れる。
 - 推測しすぎた情報、画像外の背景説明、ファイル名由来の情報は入れない。
 - 同じ定型文ばかりにしない。モデルがその文体だけを覚えやすくなります。
+
+学習時には、各キャプション末尾にtokenizerのEOS tokenを自動で追加します。これにより、推論時にキャプションが不自然に続いたり同じ文を反復したりする問題を抑えます。
 
 よい例:
 
@@ -164,9 +165,34 @@ uv venv --python 3.11
 uv sync --extra lora
 ```
 
+8bit optimizerを試す場合だけ、追加で次を使えます。
+
+```bash
+uv sync --extra bnb
+```
+
 以降のコマンドは `uv run ...` で実行します。`.venv` を直接有効化したい場合は `source .venv/bin/activate` も使えます。
 
 ## 学習
+
+デフォルトの主な学習設定:
+
+```yaml
+model:
+  language_model: sbintuitions/sarashina2.2-1b-instruct-v0.1
+  torch_dtype: bf16
+  num_image_tokens: 1024
+  freeze_vision: true
+  freeze_language_model: true
+  use_lora: true
+
+train:
+  optimizer: adamw
+  learning_rate: 0.0001
+  lr_scheduler: constant_with_warmup
+  warmup_ratio: 0.03
+  mixed_precision: bf16
+```
 
 ```bash
 uv run jicl-train --config configs/lite_llava_caption.yaml
@@ -190,10 +216,16 @@ uv run ./scripts/train_gpu.sh configs/lite_llava_caption.yaml
 NUM_PROCESSES=2 uv run ./scripts/train_gpu.sh configs/lite_llava_caption.yaml
 ```
 
+CPUで配線だけ確認する場合:
+
+```bash
+uv run jicl-train --config configs/lite_llava_caption_cpu_test.yaml
+```
+
 ## 推論
 
-学習後の `outputs/lite-captioner` には、`config.yaml`、`tokenizer/`、`projector.pt` が保存されます。
-推論では同じ vision tower / language model を読み込み、保存済みprojectorを適用して画像キャプションを生成します。
+学習後の出力先には、`config.yaml`、`tokenizer/`、`projector.pt` が保存されます。`model.use_lora: true` の場合は `lora/` も保存されます。
+推論では同じ vision tower / language model を読み込み、保存済みprojectorとLoRA adapterを適用して画像キャプションを生成します。
 
 GPU推論用スクリプト:
 
@@ -248,13 +280,13 @@ uv run jicl-generate \
 ## メモリをさらに削る設定
 
 - `train.batch_size` を下げ、`gradient_accumulation_steps` を上げる
-- `model.num_image_tokens` を `32` にする
+- `model.num_image_tokens` を下げる。ただし現在の実装では先頭から指定数の画像トークンを使います
 - `train.mixed_precision` をGPUに合わせて `bf16` または `fp16` にする
 - `model.use_lora: false` のままprojectorだけ学習する
 
-## LoRAを使う場合
+## LoRA
 
-`configs/lite_llava_caption.yaml` で:
+デフォルト設定ではLoRAを使います。
 
 ```yaml
 model:
@@ -262,4 +294,4 @@ model:
   use_lora: true
 ```
 
-この場合もベースLM全体は保存せず、projectorとLoRA adapterだけ保存します。
+この場合もベースLM全体は保存せず、projectorとLoRA adapterだけ保存します。推論時はcheckpoint内の `config.yaml` を見て、`lora/` を自動で読み込みます。
