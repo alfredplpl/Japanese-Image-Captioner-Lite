@@ -8,7 +8,7 @@ model:
   num_image_tokens: 64
   freeze_vision: true
   freeze_language_model: true
-  use_lora: false
+  use_lora: true
   lora_r: 16
   lora_alpha: 32
   lora_dropout: 0.05
