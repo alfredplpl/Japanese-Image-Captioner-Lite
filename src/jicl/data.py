@@ -68,7 +68,8 @@ class CaptionCollator:
         captions = [item["caption"] for item in batch]
         prompt = self.cfg.prompt.strip()
         prefix = f"{prompt}\n"
-        texts = [prefix + caption for caption in captions]
+        eos = self.tokenizer.eos_token or ""
+        texts = [prefix + caption.strip() + eos for caption in captions]
 
         prompt_ids = self.tokenizer(
             [prefix] * len(batch),
